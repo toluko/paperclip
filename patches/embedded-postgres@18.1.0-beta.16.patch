@@ -28,3 +28,15 @@ diff --git a/dist/index.js b/dist/index.js
                  // Connect to stderr, as that is where the messages get sent
                  (_a = this.process.stderr) === null || _a === void 0 ? void 0 : _a.on('data', (chunk) => {
                      // Parse the data as a string and log it
+@@ -218,8 +218,9 @@
+                     if (!((_b = this.process) === null || _b === void 0 ? void 0 : _b.pid)) {
+                         throw new Error('Could not find process PID');
+                     }
+-                    // Actually kill the process using the Windows taskkill command
+-                    spawn('taskkill', ['/pid', this.process.pid.toString(), '/f', '/t']);
++                    try {
++                        process.kill(this.process.pid);
++                    } catch (_err) {}
+                 }
+                 else {
+                     // If on a sane OS, simply kill using SIGINT
