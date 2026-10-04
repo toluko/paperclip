@@ -512,14 +512,30 @@ async function startServerWithDatabaseTeardown(
     };
   
     const runningPid = getRunningPid();
+    let embeddedPostgresAdopted = false;
     if (runningPid) {
-      port = embeddedPostgresOwnerPort(readFileSync(postmasterPidFile, "utf8"), dataDir, runningPid);
-      const actualDataDir = await getPostgresDataDirectory(`postgres://paperclip:paperclip@127.0.0.1:${port}/postgres`);
-      if (typeof actualDataDir !== "string" || resolve(actualDataDir) !== resolve(dataDir)) {
-        throw new Error("Refusing to reuse PostgreSQL: its data directory belongs to another instance.");
+      try {
+        port = embeddedPostgresOwnerPort(readFileSync(postmasterPidFile, "utf8"), dataDir, runningPid);
+        const actualDataDir = await getPostgresDataDirectory(`postgres://paperclip:paperclip@127.0.0.1:${port}/postgres`);
+        if (actualDataDir && resolve(actualDataDir) === resolve(dataDir)) {
+          logger.warn(`Embedded PostgreSQL already running; reusing existing process (pid=${runningPid}, port=${port})`);
+          embeddedPostgresAdopted = true;
+        } else if (actualDataDir) {
+          throw new Error("Refusing to reuse PostgreSQL: its data directory belongs to another instance.");
+        } else {
+          logger.warn(
+            `Embedded PostgreSQL pid ${runningPid} from postmaster.pid is not responding on port ${port}; treating pid file as stale`,
+          );
+          if (existsSync(postmasterPidFile)) rmSync(postmasterPidFile, { force: true });
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.includes("Refusing to reuse PostgreSQL")) {
+          throw err;
+        }
+        if (existsSync(postmasterPidFile)) rmSync(postmasterPidFile, { force: true });
       }
-      logger.warn(`Embedded PostgreSQL already running; reusing existing process (pid=${runningPid}, port=${port})`);
-    } else {
+    }
+    if (!embeddedPostgresAdopted) {
       const configuredAdminConnectionString = `postgres://paperclip:paperclip@127.0.0.1:${configuredPort}/postgres`;
       try {
         const actualDataDir = await getPostgresDataDirectory(configuredAdminConnectionString);
